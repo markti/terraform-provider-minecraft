@@ -81,7 +81,8 @@ func (p *provider) GetClient(ctx context.Context) (*minecraft.Client, error) {
 
 func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
 	return map[string]tfsdk.ResourceType{
-		"minecraft_block": blockResourceType{},
+		"minecraft_block":  blockResourceType{},
+		"minecraft_entity": entityResourceType{},
 	}, nil
 }
 
