@@ -12,7 +12,7 @@ A Minecraft stairs block with orientation and shape states.
 
 ## Example Usage
 
-```terraform
+```
 # Bottom stair, facing east, straight
 resource "minecraft_stairs" "example" {
   material = "minecraft:oak_stairs"
@@ -29,7 +29,9 @@ resource "minecraft_stairs" "example" {
   shape       = "straight"
   waterlogged = false
 }
+```
 
+```
 # Upside-down inner corner stair
 resource "minecraft_stairs" "corner" {
   material = "minecraft:stone_brick_stairs"
@@ -43,3 +45,4 @@ resource "minecraft_stairs" "corner" {
   half   = "top"
   shape  = "inner_left"
 }
+```

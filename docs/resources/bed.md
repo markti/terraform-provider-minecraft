@@ -12,7 +12,7 @@ A Minecraft bed (two-block structure). The start position is the **FOOT**; the *
 
 ## Example Usage
 
-```terraform
+```
 resource "minecraft_bed" "example" {
   material  = "minecraft:red_bed"
 
@@ -29,3 +29,4 @@ resource "minecraft_bed" "example" {
   # Optional:
   # occupied = false
 }
+```

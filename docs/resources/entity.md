@@ -12,7 +12,7 @@ Summon a Minecraft entity (mob, item frame, etc.) with optional NBT data to cont
 
 ## Example Usage
 
-```terraform
+```
 # Villager farmer, named, that won't despawn
 resource "minecraft_entity" "farmer" {
   type     = "minecraft:villager"
@@ -22,3 +22,4 @@ resource "minecraft_entity" "farmer" {
     z = -195
   }
 }
+```
