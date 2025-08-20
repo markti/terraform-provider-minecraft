@@ -36,12 +36,11 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }} # ASCII-armored private key (-----BEGIN PGP PRIVATE KEY BLOCK----- …)
           passphrase: ${{ secrets.PASSPHRASE }}
 
-      - name: GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v3
         with:
-          version: latest
-          args: release --clean
+          args: release --rm-dist
         env:
+          # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
-          PASSPHRASE: ${{ secrets.PASSPHRASE }}
