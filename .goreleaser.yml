@@ -33,7 +33,7 @@ checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
   algorithm: sha256
   extra_files:
-    - glob: "dist/terraform-registry-manifest.json"
+    - glob: "terraform-registry-manifest.json"
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
 
 # Sign only the checksum file (what you had)
@@ -52,7 +52,7 @@ signs:
 release:
   # Keep attaching your Terraform Registry manifest to the release
   extra_files:
-    - glob: "dist/terraform-registry-manifest.json"
+    - glob: "terraform-registry-manifest.json"
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
   draft: false
   prerelease: auto
