@@ -59,6 +59,16 @@ func (c Client) DeleteBlock(ctx context.Context, x, y, z int) error {
 	return nil
 }
 
+// CreateStairs places a stairs block (e.g., "minecraft:oak_stairs") with orientation.
+func (c Client) CreateStairs(ctx context.Context, material string, x, y, z int, facing, half, shape string, waterlogged bool) error {
+	cmd := fmt.Sprintf(
+		`setblock %d %d %d %s[facing=%s,half=%s,shape=%s,waterlogged=%t] replace`,
+		x, y, z, material, facing, half, shape, waterlogged,
+	)
+	_, err := c.client.SendCommand(cmd)
+	return err
+}
+
 // Creates an entity.
 func (c Client) CreateEntity(ctx context.Context, entity string, position string, id string) error {
 	command := fmt.Sprintf("summon minecraft:%s %s {CustomName:'{\"text\":\"%s\"}'}", entity, position, id)
