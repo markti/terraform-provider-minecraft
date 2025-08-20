@@ -6,7 +6,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 # Releases need permissions to read and write the repository contents.
 # GitHub considers creating releases and uploading assets as writing contents.
@@ -23,24 +23,25 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v3
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           cache: true
-      # This uses an action (hashicorp/ghaction-import-gpg) that assumes you set your 
+      # This uses an action (hashicorp/ghaction-import-gpg) that assumes you set your
       # private key in the `GPG_PRIVATE_KEY` secret and passphrase in the `PASSPHRASE`
       # secret. If you would rather own your own GPG handling, please fork this action
       # or use an alternative one for key handling.
       - name: Import GPG key
         id: import_gpg
-        uses: hashicorp/ghaction-import-gpg@v2.1.0
-        env:
-          # These secrets will need to be configured for the repository:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          PASSPHRASE: ${{ secrets.PASSPHRASE }}
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v3
+        uses: crazy-max/ghaction-import-gpg@v6
         with:
-          args: release --rm-dist
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }} # ASCII-armored private key (-----BEGIN PGP PRIVATE KEY BLOCK----- …)
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
         env:
-          # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
+          PASSPHRASE: ${{ secrets.PASSPHRASE }}
