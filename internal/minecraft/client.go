@@ -71,7 +71,7 @@ func (c Client) CreateStairs(ctx context.Context, material string, x, y, z int, 
 
 // Creates an entity.
 func (c Client) CreateEntity(ctx context.Context, entity string, position string, id string) error {
-	command := fmt.Sprintf("summon minecraft:%s %s {CustomName:'{\"text\":\"%s\"}'}", entity, position, id)
+	command := fmt.Sprintf("summon %s %s {CustomName:'{\"text\":\"%s\"}'}", entity, position, id)
 	_, err := c.client.SendCommand(command)
 	if err != nil {
 		return err
@@ -83,14 +83,14 @@ func (c Client) CreateEntity(ctx context.Context, entity string, position string
 // Deletes an entity.
 func (c Client) DeleteEntity(ctx context.Context, entity string, position string, id string) error {
 	// Remove the entity.
-	command := fmt.Sprintf("kill @e[type=minecraft:%s,nbt={CustomName:'{\"text\":\"%s\"}'}]", entity, id)
+	command := fmt.Sprintf("kill @e[type=%s,nbt={CustomName:'{\"text\":\"%s\"}'}]", entity, id)
 	_, err := c.client.SendCommand(command)
 	if err != nil {
 		return err
 	}
 
 	// Remove the entity from inventories.
-	command = fmt.Sprintf("clear @a minecraft:%s{display:{Name:'{\"text\":\"%s\"}'}}", entity, id)
+	command = fmt.Sprintf("clear @a %s{display:{Name:'{\"text\":\"%s\"}'}}", entity, id)
 	_, err = c.client.SendCommand(command)
 	if err != nil {
 		return err
