@@ -85,6 +85,7 @@ func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceT
 		"minecraft_entity": entityResourceType{},
 		"minecraft_bed":    bedResourceType{},
 		"minecraft_stairs": stairsResourceType{},
+		"minecraft_chest":  chestResourceType{},
 	}, nil
 }
 
