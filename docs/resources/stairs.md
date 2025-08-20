@@ -12,7 +12,7 @@ A Minecraft stairs block with orientation and shape states.
 
 ## Example Usage
 
-```
+```terraform
 # Bottom stair, facing east, straight
 resource "minecraft_stairs" "example" {
   material = "minecraft:oak_stairs"
@@ -37,20 +37,23 @@ resource "minecraft_stairs" "example" {
 
 ### Required
 
-- `material` (String) The material of the block
-- `position` (Attributes) The position of the block (see [below for nested schema](#nestedatt--position))
+- `material` (String) The material of the stairs. (Supported values: `minecraft:acacia_stairs`, `minecraft:andesite_stairs`, `minecraft:birch_stairs`, `minecraft:blackstone_stairs`, `minecraft:brick_stairs`, `minecraft:cherry_stairs`, `minecraft:cobbled_deepslate_stairs`, `minecraft:cobblestone_stairs`, `minecraft:crimson_stairs`, `minecraft:dark_oak_stairs`, `minecraft:dark_prismarine_stairs`, `minecraft:deepslate_brick_stairs`, `minecraft:deepslate_tile_stairs`, `minecraft:diamond_stairs`, `minecraft:diorite_stairs`, `minecraft:granite_stairs`, `minecraft:jungle_stairs`, `minecraft:nether_brick_stairs`, `minecraft:oak_stairs`, `minecraft:polished_andesite_stairs`, `minecraft:polished_blackstone_brick_stairs`, `minecraft:polished_blackstone_stairs`, `minecraft:polished_deepslate_stairs`, `minecraft:polished_diorite_stairs`, `minecraft:polished_granite_stairs`, `minecraft:prismarine_brick_stairs`, `minecraft:prismarine_stairs`, `minecraft:purpur_stairs`, `minecraft:quartz_stairs`, `minecraft:red_nether_brick_stairs`, `minecraft:red_sandstone_stairs`, `minecraft:sandstone_stairs`, `minecraft:spruce_stairs`, `minecraft:stone_brick_stairs`, `minecraft:stone_stairs`, `minecraft:warped_stairs`)
+- `facing` (String) The cardinal direction the stairs should face. (`north`, `south`, `east`, `west`)
+- `half` (String) Whether the stair is placed on the top or bottom half of the block space. (`top`, `bottom`)
+- `shape` (String) (`straight`, `inner_left`, `inner_right`, `outer_left`, `outer_right`)
+- `position` (Attributes) The position of the stairs (see [below for nested schema](#nestedatt--position))
 
 ### Read-Only
 
-- `id` (String) ID of the block
+- `id` (String) ID of the stairs
 
 <a id="nestedatt--position"></a>
 ### Nested Schema for `position`
 
 Required:
 
-- `x` (Number) X coordinate of the block
-- `y` (Number) Y coordinate of the block
-- `z` (Number) Z coordinate of the block
+- `x` (Number) X coordinate of the stairs
+- `y` (Number) Y coordinate of the stairs
+- `z` (Number) Z coordinate of the stairs
 
 

@@ -12,7 +12,7 @@ A Minecraft bed (two-block structure). The start position is the **FOOT**; the *
 
 ## Example Usage
 
-```
+```terraform
 resource "minecraft_bed" "example" {
   material  = "minecraft:red_bed"
 
@@ -23,7 +23,7 @@ resource "minecraft_bed" "example" {
     z = 10
   }
 
-  # HEAD will be placed one block in this direction from the FOOT
+  # HEAD will be placed one bed in this direction from the FOOT
   direction = "east"
 
   # Optional:
@@ -37,20 +37,21 @@ resource "minecraft_bed" "example" {
 
 ### Required
 
-- `material` (String) The material of the block
-- `position` (Attributes) The position of the block (see [below for nested schema](#nestedatt--position))
+- `material` (String) The material of the bed. (Supported values: `minecraft:black_bed`, `minecraft:blue_bed`, `minecraft:brown_bed`, `minecraft:cyan_bed`, `minecraft:gray_bed`, `minecraft:green_bed`, `minecraft:light_blue_bed`, `minecraft:light_gray_bed`, `minecraft:lime_bed`, `minecraft:magenta_bed`, `minecraft:orange_bed`, `minecraft:pink_bed`, `minecraft:purple_bed`, `minecraft:red_bed`, `minecraft:white_bed`, `minecraft:yellow_bed`)
+- `direction` (String) The direction of the bed. (Supported values: `north`, `south`, `east`, `west`)
+- `position` (Attributes) The position of the bed (see [below for nested schema](#nestedatt--position))
 
 ### Read-Only
 
-- `id` (String) ID of the block
+- `id` (String) ID of the bed
 
 <a id="nestedatt--position"></a>
 ### Nested Schema for `position`
 
 Required:
 
-- `x` (Number) X coordinate of the block
-- `y` (Number) Y coordinate of the block
-- `z` (Number) Z coordinate of the block
+- `x` (Number) X coordinate of the bed
+- `y` (Number) Y coordinate of the bed
+- `z` (Number) Z coordinate of the bed
 
 

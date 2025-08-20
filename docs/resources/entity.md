@@ -12,7 +12,7 @@ Summon a Minecraft entity (mob, item frame, etc.) with optional NBT data to cont
 
 ## Example Usage
 
-```
+```terraform
 # Villager farmer, named, that won't despawn
 resource "minecraft_entity" "farmer" {
   type     = "minecraft:villager"
@@ -30,20 +30,20 @@ resource "minecraft_entity" "farmer" {
 
 ### Required
 
-- `material` (String) The material of the block
-- `position` (Attributes) The position of the block (see [below for nested schema](#nestedatt--position))
+- `type` (String) The material of the entity (supported values: `minecraft:allay`, `minecraft:armadillo`, `minecraft:area_effect_cloud`, `minecraft:armor_stand`, `minecraft:arrow`, `minecraft:axolotl`, `minecraft:bat`, `minecraft:bee`, `minecraft:blaze`, `minecraft:block_display`, `minecraft:boat`, `minecraft:breeze`, `minecraft:cat`, `minecraft:cave_spider`, `minecraft:chest_boat`, `minecraft:chicken`, `minecraft:cod`, `minecraft:cow`, `minecraft:creeper`, `minecraft:dolphin`, `minecraft:donkey`, `minecraft:dragon_fireball`, `minecraft:drowned`, `minecraft:elder_guardian`, `minecraft:end_crystal`, `minecraft:end_dragon`, `minecraft:enderman`, `minecraft:endermite`, `minecraft:evoker`, `minecraft:evoker_fangs`, `minecraft:experience_bottle`, `minecraft:experience_orb`, `minecraft:eye_of_ender`, `minecraft:falling_block`, `minecraft:fireball`, `minecraft:firework_rocket`, `minecraft:fox`, `minecraft:frog`, `minecraft:ghast`, `minecraft:giant`, `minecraft:glow_item_frame`, `minecraft:glow_squid`, `minecraft:goat`, `minecraft:guardian`, `minecraft:hoglin`, `minecraft:hopper_minecart`, `minecraft:horse`, `minecraft:husk`, `minecraft:illusioner`, `minecraft:interactive_entity`, `minecraft:iron_golem`, `minecraft:item`, `minecraft:item_display`, `minecraft:item_frame`, `minecraft:leash_knot`, `minecraft:lightning_bolt`, `minecraft:llama`, `minecraft:llama_spit`, `minecraft:magma_cube`, `minecraft:marker`, `minecraft:minecart`, `minecraft:mooshroom`, `minecraft:mule`, `minecraft:ocelot`, `minecraft:painting`, `minecraft:panda`, `minecraft:parrot`, `minecraft:phantom`, `minecraft:pig`, `minecraft:piglin`, `minecraft:piglin_brute`, `minecraft:pillager`, `minecraft:polar_bear`, `minecraft:potion`, `minecraft:pufferfish`, `minecraft:rabbit`, `minecraft:ravager`, `minecraft:salmon`, `minecraft:sheep`, `minecraft:shulker`, `minecraft:shulker_bullet`, `minecraft:silverfish`, `minecraft:skeleton`, `minecraft:skeleton_horse`, `minecraft:slime`, `minecraft:small_fireball`, `minecraft:sniffer`, `minecraft:snow_golem`, `minecraft:snowball`, `minecraft:spawner_minecart`, `minecraft:spectral_arrow`, `minecraft:spider`, `minecraft:squid`, `minecraft:stray`, `minecraft:strider`, `minecraft:tadpole`, `minecraft:text_display`, `minecraft:tnt`, `minecraft:tnt_minecart`, `minecraft:trader_llama`, `minecraft:trident`, `minecraft:tropical_fish`, `minecraft:turtle`, `minecraft:vex`, `minecraft:villager`, `minecraft:vindicator`, `minecraft:wandering_trader`, `minecraft:warden`, `minecraft:witch`, `minecraft:wither`, `minecraft:wither_skeleton`, `minecraft:wither_skull`, `minecraft:wolf`, `minecraft:zoglin`, `minecraft:zombie`, `minecraft:zombie_horse`, `minecraft:zombie_villager`, `minecraft:zombified_piglin`)
+- `position` (Attributes) The position of the entity (see [below for nested schema](#nestedatt--position))
 
 ### Read-Only
 
-- `id` (String) ID of the block
+- `id` (String) ID of the entity
 
 <a id="nestedatt--position"></a>
 ### Nested Schema for `position`
 
 Required:
 
-- `x` (Number) X coordinate of the block
-- `y` (Number) Y coordinate of the block
-- `z` (Number) Z coordinate of the block
+- `x` (Number) X coordinate of the entity
+- `y` (Number) Y coordinate of the entity
+- `z` (Number) Z coordinate of the entity
 
 
