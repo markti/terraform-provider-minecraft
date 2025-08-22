@@ -3,12 +3,12 @@
 page_title: "minecraft_fill Resource - terraform-provider-minecraft"
 subcategory: ""
 description: |-
-  A Minecraft block
+  A Minecraft fill
 ---
 
 # minecraft_fill (Resource)
 
-A Minecraft block
+This will fill an area with Minecraft blocks
 
 ## Example Usage
 
