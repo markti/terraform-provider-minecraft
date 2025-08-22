@@ -245,3 +245,183 @@ func (c Client) JoinTeamEntitiesByTag(ctx context.Context, team, tag string) err
 func (c Client) LeaveTeamEntitiesByTag(ctx context.Context, tag string) error {
 	return c.LeaveTeamTargets(ctx, fmt.Sprintf(`@e[tag=%s]`, tag))
 }
+
+// Set a boolean gamerule, e.g. keepInventory, doDaylightCycle, mobGriefing, etc.
+func (c Client) SetGameRuleBool(ctx context.Context, rule string, value bool) error {
+	rule = strings.TrimSpace(rule)
+	if !isBoolRule(rule) {
+		return fmt.Errorf("gamerule %q is not a known boolean rule", rule)
+	}
+	val := "false"
+	if value {
+		val = "true"
+	}
+	_, err := c.client.SendCommand(fmt.Sprintf("gamerule %s %s", rule, val))
+	return err
+}
+
+// Set an integer gamerule, e.g. randomTickSpeed, maxEntityCramming, spawnRadius, playersSleepingPercentage, maxCommandChainLength.
+func (c Client) SetGameRuleInt(ctx context.Context, rule string, value int) error {
+	rule = strings.TrimSpace(rule)
+	if !isIntRule(rule) {
+		return fmt.Errorf("gamerule %q is not a known integer rule", rule)
+	}
+	_, err := c.client.SendCommand(fmt.Sprintf("gamerule %s %d", rule, value))
+	return err
+}
+
+// Read current value as a raw string. For bool rules, returns "true"/"false"; for int rules, returns the number.
+func (c Client) GetGameRule(ctx context.Context, rule string) (string, error) {
+	rule = strings.TrimSpace(rule)
+	// Query form: /gamerule <rule>
+	out, err := c.client.SendCommand(fmt.Sprintf("gamerule %s", rule))
+	if err != nil {
+		return "", err
+	}
+	// Server usually replies with just the value, but some servers/plugins may add text.
+	// Try to extract the last token that parses for ints or matches true/false.
+	line := strings.TrimSpace(out)
+	fields := strings.Fields(line)
+	if len(fields) == 1 {
+		return fields[0], nil
+	}
+	// Heuristic: scan from end for a bool or int-looking token.
+	for i := len(fields) - 1; i >= 0; i-- {
+		f := strings.TrimSpace(fields[i])
+		lf := strings.ToLower(f)
+		if lf == "true" || lf == "false" {
+			return lf, nil
+		}
+		if _, err := strconv.Atoi(f); err == nil {
+			return f, nil
+		}
+	}
+	// Fallback: return raw output
+	return line, nil
+}
+
+// Reset (aka "delete") a gamerule back to its vanilla default.
+// Returns an error if we don't have a known default for that rule.
+func (c Client) ResetGameRuleToDefault(ctx context.Context, rule string) error {
+	rule = strings.TrimSpace(rule)
+
+	if def, ok := defaultBoolRules[rule]; ok {
+		return c.SetGameRuleBool(ctx, rule, def)
+	}
+	if def, ok := defaultIntRules[rule]; ok {
+		return c.SetGameRuleInt(ctx, rule, def)
+	}
+	return fmt.Errorf("no known default for gamerule %q; cannot reset", rule)
+}
+
+// ---- Known rules & defaults (Java Edition) ----
+
+// Keep this list small and pragmatic; extend as you need.
+// Boolean rules (subset of commonly used)
+var boolRules = map[string]struct{}{
+	"announceAdvancements":       {},
+	"disableElytraMovementCheck": {},
+	"disablePlayerMovementCheck": {},
+	"disableRaids":               {},
+	"doDaylightCycle":            {},
+	"doEntityDrops":              {},
+	"doFireTick":                 {},
+	"doInsomnia":                 {},
+	"doImmediateRespawn":         {},
+	"doLimitedCrafting":          {},
+	"doMobLoot":                  {},
+	"doMobSpawning":              {},
+	"doPatrolSpawning":           {},
+	"doTileDrops":                {},
+	"doTraderSpawning":           {},
+	"doVinesSpread":              {},
+	"doWeatherCycle":             {},
+	"doWardenSpawning":           {},
+	"drowningDamage":             {},
+	"fallDamage":                 {},
+	"fireDamage":                 {},
+	"forgiveDeadPlayers":         {},
+	"keepInventory":              {},
+	"logAdminCommands":           {},
+	"mobGriefing":                {},
+	"naturalRegeneration":        {},
+	"reducedDebugInfo":           {},
+	"sendCommandFeedback":        {},
+	"showDeathMessages":          {},
+	"spectatorsGenerateChunks":   {},
+	"universalAnger":             {},
+}
+
+// Integer rules (subset of commonly used)
+var intRules = map[string]struct{}{
+	"maxCommandChainLength":     {},
+	"maxEntityCramming":         {},
+	"playersSleepingPercentage": {},
+	"randomTickSpeed":           {},
+	"spawnRadius":               {},
+}
+
+// Vanilla defaults (Java). Extend as needed.
+var defaultBoolRules = map[string]bool{
+	"announceAdvancements":       true,
+	"disableElytraMovementCheck": false,
+	"disablePlayerMovementCheck": false,
+	"disableRaids":               false,
+	"doDaylightCycle":            true,
+	"doEntityDrops":              true,
+	"doFireTick":                 true,
+	"doInsomnia":                 true,
+	"doImmediateRespawn":         false,
+	"doLimitedCrafting":          false,
+	"doMobLoot":                  true,
+	"doMobSpawning":              true,
+	"doPatrolSpawning":           true,
+	"doTileDrops":                true,
+	"doTraderSpawning":           true,
+	"doVinesSpread":              true,
+	"doWeatherCycle":             true,
+	"doWardenSpawning":           true,
+	"drowningDamage":             true,
+	"fallDamage":                 true,
+	"fireDamage":                 true,
+	"forgiveDeadPlayers":         true,
+	"keepInventory":              false,
+	"logAdminCommands":           true,
+	"mobGriefing":                true,
+	"naturalRegeneration":        true,
+	"reducedDebugInfo":           false,
+	"sendCommandFeedback":        true,
+	"showDeathMessages":          true,
+	"spectatorsGenerateChunks":   true,
+	"universalAnger":             false,
+}
+
+var defaultIntRules = map[string]int{
+	"maxCommandChainLength":     65536,
+	"maxEntityCramming":         24,
+	"playersSleepingPercentage": 100,
+	"randomTickSpeed":           3,
+	"spawnRadius":               5,
+}
+
+// ---- Internals ----
+
+func isBoolRule(rule string) bool {
+	_, ok := boolRules[rule]
+	return ok
+}
+
+func isIntRule(rule string) bool {
+	_, ok := intRules[rule]
+	return ok
+}
+
+func (c Client) FillBlock(ctx context.Context, material string, sx, sy, sz, ex, ey, ez int) error {
+	command := fmt.Sprintf("fill %d %d %d %d %d %d %s hollow", sx, sy, sz, ex, ey, ez, material)
+	_, err := c.client.SendCommand(command)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

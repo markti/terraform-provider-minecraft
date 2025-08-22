@@ -88,6 +88,8 @@ func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceT
 		"minecraft_chest":       chestResourceType{},
 		"minecraft_team":        teamResourceType{},
 		"minecraft_team_member": teamMemberResourceType{},
+		"minecraft_fill":        fillResourceType{},
+		"minecraft_gamerule":    gameruleResourceType{},
 	}, nil
 }
 
