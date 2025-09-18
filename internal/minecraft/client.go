@@ -169,10 +169,19 @@ func (c Client) SetDefaultGameMode(ctx context.Context, gamemode string) error {
 	return err
 }
 
+
 // Sets the user game mode
 func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name string) error {
 	var cmd string
 	cmd = fmt.Sprintf(`gamemode %s %s`, gamemode, name)
+
+	_, err := c.client.SendCommand(cmd)
+	return err
+}
+
+func (c Client) SetDayLock(ctx context.Context, enabled bool) error {
+	var cmd string
+	cmd = fmt.Sprintf(`daylock %t`, enabled)
 
 	_, err := c.client.SendCommand(cmd)
 	return err
