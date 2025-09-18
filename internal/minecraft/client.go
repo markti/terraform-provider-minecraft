@@ -179,10 +179,23 @@ func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name strin
 	return err
 }
 
-func (c Client) SetDayLock(ctx context.Context, enabled bool) error {
-	var cmd string
-	cmd = fmt.Sprintf(`daylock %t`, enabled)
+func (c Client) EnableDayLock(ctx context.Context) error {
+    // 1) Lock the time to day
+    if _, err := c.client.SendCommand("daylock true"); err != nil {
+        return fmt.Errorf("daylock true failed: %w", err)
+    }
 
+    // 2) Immediately set the world time to day
+    if _, err := c.client.SendCommand("time set day"); err != nil {
+        return fmt.Errorf("time set day failed: %w", err)
+    }
+	return nil
+}
+
+
+func (c Client) DisableDayLock(ctx context.Context) error {
+	var cmd string
+	cmd = fmt.Sprintf(`daylock true`)
 	_, err := c.client.SendCommand(cmd)
 	return err
 }
