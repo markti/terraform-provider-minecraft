@@ -6,5 +6,5 @@ resource "minecraft_team" "red" {
 
 resource "minecraft_team_member" "markti" {
   team   = minecraft_team.red.id
-  player = "markti22"
+  player = "markti"
 }
