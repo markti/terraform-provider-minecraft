@@ -99,6 +99,25 @@ func (c Client) DeleteEntity(ctx context.Context, entity string, position string
 	return nil
 }
 
+
+// Creates operator status for the specified user name
+func (c Client) CreateOp(ctx context.Context, name string) error {
+	var cmd string
+	cmd = fmt.Sprintf(`op %s`, name)
+
+	_, err := c.client.SendCommand(cmd)
+	return err
+}
+
+// Removes operator status for the specified user name
+func (c Client) RemoveOp(ctx context.Context, name string) error {
+	var cmd string
+	cmd = fmt.Sprintf(`deop %s`, name)
+
+	_, err := c.client.SendCommand(cmd)
+	return err
+}
+
 // Creates a team with a given name and optional display name.
 func (c Client) CreateTeam(ctx context.Context, name string, displayName string) error {
 	var cmd string
