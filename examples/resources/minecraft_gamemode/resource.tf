@@ -9,5 +9,5 @@ resource "minecraft_gamemode" "default" {
 # sets the game mode for specific user
 resource "minecraft_gamemode" "markti" {
   mode   = "creative"
-  player = "markti22"
+  player = "markti"
 }

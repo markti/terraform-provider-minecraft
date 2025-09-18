@@ -27,8 +27,8 @@ resource "minecraft_gamemode" "default" {
 ### Force a Player into Spectator
 
 ``` hcl
-resource "minecraft_gamemode" "markti22" {
-  player = "markti22"
+resource "minecraft_gamemode" "mark" {
+  player = "markti"
   mode   = "spectator"
 }
 ```

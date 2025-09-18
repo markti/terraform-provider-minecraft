@@ -143,9 +143,6 @@ func (c Client) GetUserGameMode(ctx context.Context, name string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("send command: %w", err)
 	}
-	// Typical output:
-	// markti22 has the following entity data: playerGameType: 1
-
 	// Look for the final colon and grab everything after it.
 	parts := strings.Split(out, ":")
 	if len(parts) < 2 {
