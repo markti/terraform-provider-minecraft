@@ -100,6 +100,87 @@ func (c Client) DeleteEntity(ctx context.Context, entity string, position string
 }
 
 
+// GameMode names keyed by the numeric values returned by Minecraft.
+var gameModeNames = map[int]string{
+	0: "survival",
+	1: "creative",
+	2: "adventure",
+	3: "spectator",
+}
+///data get storage minecraft:server worldDefaultGameMode
+// GetDefaultGameMode queries the server for the world’s default game mode
+// and returns it as a lowercase string (e.g. "creative").
+func (c Client) GetDefaultGameMode(ctx context.Context) (string, error) {
+	out, err := c.client.SendCommand(`/data get storage minecraft:server worldDefaultGameMode`)
+	if err != nil {
+		return "", fmt.Errorf("send command: %w", err)
+	}
+	// Typical output:
+	// Storage minecraft:server has the following data: {worldDefaultGameMode:1}
+
+	// Find the last colon and take everything after it.
+	parts := strings.Split(out, ":")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected response: %q", out)
+	}
+	numStr := strings.TrimRight(strings.TrimSpace(parts[len(parts)-1]), "}")
+	id, err := strconv.Atoi(numStr)
+	if err != nil {
+		return "", fmt.Errorf("parse int: %w", err)
+	}
+	name, ok := gameModeNames[id]
+	if !ok {
+		return "", fmt.Errorf("unknown game mode id %d", id)
+	}
+	return name, nil
+}
+
+// GetUserGameMode runs `/data get entity <name> playerGameType`
+// and returns the player's current game mode as a lowercase string
+// ("survival", "creative", "adventure", or "spectator").
+func (c Client) GetUserGameMode(ctx context.Context, name string) (string, error) {
+	out, err := c.client.SendCommand(fmt.Sprintf(`/data get entity %s playerGameType`, name))
+	if err != nil {
+		return "", fmt.Errorf("send command: %w", err)
+	}
+	// Typical output:
+	// markti22 has the following entity data: playerGameType: 1
+
+	// Look for the final colon and grab everything after it.
+	parts := strings.Split(out, ":")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected response: %q", out)
+	}
+	numStr := strings.TrimSpace(parts[len(parts)-1])
+	id, err := strconv.Atoi(numStr)
+	if err != nil {
+		return "", fmt.Errorf("parse int: %w", err)
+	}
+	nameStr, ok := gameModeNames[id]
+	if !ok {
+		return "", fmt.Errorf("unknown game mode id %d", id)
+	}
+	return nameStr, nil
+}
+
+// Sets the default game mode
+func (c Client) SetDefaultGameMode(ctx context.Context, gamemode string) error {
+	var cmd string
+	cmd = fmt.Sprintf(`defaultgamemode %s`, gamemode)
+
+	_, err := c.client.SendCommand(cmd)
+	return err
+}
+
+// Sets the user game mode
+func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name string) error {
+	var cmd string
+	cmd = fmt.Sprintf(`gamemode %s %s`, gamemode, name)
+
+	_, err := c.client.SendCommand(cmd)
+	return err
+}
+
 // Creates operator status for the specified user name
 func (c Client) CreateOp(ctx context.Context, name string) error {
 	var cmd string
