@@ -147,7 +147,6 @@ func (c Client) DeleteEntity(ctx context.Context, entity string, position string
 	return nil
 }
 
-
 // GameMode names keyed by the numeric values returned by Minecraft.
 var gameModeNames = map[int]string{
 	0: "survival",
@@ -155,7 +154,8 @@ var gameModeNames = map[int]string{
 	2: "adventure",
 	3: "spectator",
 }
-///data get storage minecraft:server worldDefaultGameMode
+
+// /data get storage minecraft:server worldDefaultGameMode
 // GetDefaultGameMode queries the server for the world’s default game mode
 // and returns it as a lowercase string (e.g. "creative").
 func (c Client) GetDefaultGameMode(ctx context.Context) (string, error) {
@@ -217,7 +217,6 @@ func (c Client) SetDefaultGameMode(ctx context.Context, gamemode string) error {
 	return err
 }
 
-
 // Sets the user game mode
 func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name string) error {
 	var cmd string
@@ -228,18 +227,17 @@ func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name strin
 }
 
 func (c Client) EnableDayLock(ctx context.Context) error {
-    // 1) Lock the time to day
-    if _, err := c.client.SendCommand("daylock true"); err != nil {
-        return fmt.Errorf("daylock true failed: %w", err)
-    }
+	// 1) Lock the time to day
+	if _, err := c.client.SendCommand("daylock true"); err != nil {
+		return fmt.Errorf("daylock true failed: %w", err)
+	}
 
-    // 2) Immediately set the world time to day
-    if _, err := c.client.SendCommand("time set day"); err != nil {
-        return fmt.Errorf("time set day failed: %w", err)
-    }
+	// 2) Immediately set the world time to day
+	if _, err := c.client.SendCommand("time set day"); err != nil {
+		return fmt.Errorf("time set day failed: %w", err)
+	}
 	return nil
 }
-
 
 func (c Client) DisableDayLock(ctx context.Context) error {
 	var cmd string
@@ -591,4 +589,18 @@ func (c Client) FillBlock(ctx context.Context, material string, sx, sy, sz, ex, 
 	}
 
 	return nil
+}
+
+// BanPlayer bans a player from the server.
+func (c Client) BanPlayer(ctx context.Context, player string, reason string) error {
+	command := fmt.Sprintf("ban %s %s", player, reason)
+	_, err := c.client.SendCommand(command)
+	return err
+}
+
+// UnbanPlayer unbans a player from the server.
+func (c Client) UnbanPlayer(ctx context.Context, player string) error {
+	command := fmt.Sprintf("pardon %s", player)
+	_, err := c.client.SendCommand(command)
+	return err
 }
