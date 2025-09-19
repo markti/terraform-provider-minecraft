@@ -58,15 +58,15 @@ type daylockResource struct {
 
 // Minimal client surface needed (easy to mock in tests)
 type daylockClient interface {
-	SetDayLock(ctx context.Context, enabled bool) error
+	EnableDayLock(ctx context.Context) error
+	DisableDayLock(ctx context.Context) error
 }
 
 // -------- CRUD --------
 
 func (r daylockResource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
 	var plan daylockResourceData
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -77,15 +77,20 @@ func (r daylockResource) Create(ctx context.Context, req tfsdk.CreateResourceReq
 		return
 	}
 
-	// Apply desired state
-	if err := client.SetDayLock(ctx, plan.Enabled.Value); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed to set daylock to %t: %s", plan.Enabled.Value, err))
-		return
+	// Apply desired state via new helpers
+	if plan.Enabled.Value {
+		if err := client.EnableDayLock(ctx); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed to enable daylock: %s", err))
+			return
+		}
+	} else {
+		if err := client.DisableDayLock(ctx); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed to disable daylock: %s", err))
+			return
+		}
 	}
 
-	// Single global instance; use a fixed id
 	plan.ID = types.String{Value: "default"}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -112,30 +117,34 @@ func (r daylockResource) Update(ctx context.Context, req tfsdk.UpdateResourceReq
 		return
 	}
 
-	// Re-apply desired enabled state
-	if err := client.SetDayLock(ctx, plan.Enabled.Value); err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed to set daylock to %t: %s", plan.Enabled.Value, err))
-		return
+	// Re-apply desired state via new helpers
+	if plan.Enabled.Value {
+		if err := client.EnableDayLock(ctx); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed to enable daylock: %s", err))
+			return
+		}
+	} else {
+		if err := client.DisableDayLock(ctx); err != nil {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Failed to disable daylock: %s", err))
+			return
+		}
 	}
 
-	// Keep the fixed id
 	if plan.ID.Null || plan.ID.Unknown {
 		plan.ID = types.String{Value: "default"}
 	}
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
 func (r daylockResource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	// On delete, best-effort to restore normal cycle (disable daylock).
+	// On delete, best-effort to restore normal cycle.
 	client, err := r.provider.GetClient(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
 		return
 	}
 
-	if err := client.SetDayLock(ctx, false); err != nil {
-		// Non-fatal: resource is being removed from state regardless.
+	if err := client.DisableDayLock(ctx); err != nil {
 		resp.Diagnostics.AddWarning("Delete Warning", fmt.Sprintf("Failed to disable daylock during destroy: %s", err))
 	}
 }
@@ -146,7 +155,5 @@ func (r daylockResource) ImportState(ctx context.Context, req tfsdk.ImportResour
 		resp.Diagnostics.AddError("Import Error", "Expected import ID to be \"default\" for the global daylock setting.")
 		return
 	}
-
-	// Set id; we cannot know actual enabled value without a read API, so leave it as-is/unknown.
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("id"), "default")...)
 }

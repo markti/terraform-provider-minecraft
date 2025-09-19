@@ -80,6 +80,54 @@ func (c Client) CreateEntity(ctx context.Context, entity string, position string
 	return nil
 }
 
+// Create Sheep
+func (c Client) CreateSheep(ctx context.Context, position string, id string, color string, sheared bool) error {
+	// Map sheep colors to their NBT integer values
+	colorMap := map[string]int{
+		"white":      0,
+		"orange":     1,
+		"magenta":    2,
+		"light_blue": 3,
+		"yellow":     4,
+		"lime":       5,
+		"pink":       6,
+		"gray":       7,
+		"light_gray": 8,
+		"cyan":       9,
+		"purple":     10,
+		"blue":       11,
+		"brown":      12,
+		"green":      13,
+		"red":        14,
+		"black":      15,
+	}
+
+	// Default to white if invalid color
+	colorVal, ok := colorMap[color]
+	if !ok {
+		colorVal = 0
+	}
+
+	// Convert sheared bool → NBT-friendly value
+	shearedVal := 0
+	if sheared {
+		shearedVal = 1
+	}
+
+	// Build summon command
+	command := fmt.Sprintf(
+		`summon sheep %s {CustomName:'{"text":"%s"}',Color:%d,Sheared:%db}`,
+		position, id, colorVal, shearedVal,
+	)
+
+	_, err := c.client.SendCommand(command)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Deletes an entity.
 func (c Client) DeleteEntity(ctx context.Context, entity string, position string, id string) error {
 	// Remove the entity.
@@ -179,10 +227,23 @@ func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name strin
 	return err
 }
 
-func (c Client) SetDayLock(ctx context.Context, enabled bool) error {
-	var cmd string
-	cmd = fmt.Sprintf(`daylock %t`, enabled)
+func (c Client) EnableDayLock(ctx context.Context) error {
+    // 1) Lock the time to day
+    if _, err := c.client.SendCommand("daylock true"); err != nil {
+        return fmt.Errorf("daylock true failed: %w", err)
+    }
 
+    // 2) Immediately set the world time to day
+    if _, err := c.client.SendCommand("time set day"); err != nil {
+        return fmt.Errorf("time set day failed: %w", err)
+    }
+	return nil
+}
+
+
+func (c Client) DisableDayLock(ctx context.Context) error {
+	var cmd string
+	cmd = fmt.Sprintf(`daylock true`)
 	_, err := c.client.SendCommand(cmd)
 	return err
 }
