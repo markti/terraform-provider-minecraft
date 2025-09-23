@@ -31,14 +31,14 @@ module "cube" {
   material = "cobblestone"
 
   position = {
-    x = -198,
-    y = 68,
+    x = -198
+    y = 68
     z = -195
   }
 
   dimensions = {
-    width  = 3,
-    length = 3,
+    width  = 3
+    length = 3
     height = 3
   }
 }
