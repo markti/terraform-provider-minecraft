@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -147,7 +148,6 @@ func (c Client) DeleteEntity(ctx context.Context, entity string, position string
 	return nil
 }
 
-
 // GameMode names keyed by the numeric values returned by Minecraft.
 var gameModeNames = map[int]string{
 	0: "survival",
@@ -155,7 +155,8 @@ var gameModeNames = map[int]string{
 	2: "adventure",
 	3: "spectator",
 }
-///data get storage minecraft:server worldDefaultGameMode
+
+// /data get storage minecraft:server worldDefaultGameMode
 // GetDefaultGameMode queries the server for the world’s default game mode
 // and returns it as a lowercase string (e.g. "creative").
 func (c Client) GetDefaultGameMode(ctx context.Context) (string, error) {
@@ -217,7 +218,6 @@ func (c Client) SetDefaultGameMode(ctx context.Context, gamemode string) error {
 	return err
 }
 
-
 // Sets the user game mode
 func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name string) error {
 	var cmd string
@@ -228,18 +228,17 @@ func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name strin
 }
 
 func (c Client) EnableDayLock(ctx context.Context) error {
-    // 1) Lock the time to day
-    if _, err := c.client.SendCommand("daylock true"); err != nil {
-        return fmt.Errorf("daylock true failed: %w", err)
-    }
+	// 1) Lock the time to day
+	if _, err := c.client.SendCommand("daylock true"); err != nil {
+		return fmt.Errorf("daylock true failed: %w", err)
+	}
 
-    // 2) Immediately set the world time to day
-    if _, err := c.client.SendCommand("time set day"); err != nil {
-        return fmt.Errorf("time set day failed: %w", err)
-    }
+	// 2) Immediately set the world time to day
+	if _, err := c.client.SendCommand("time set day"); err != nil {
+		return fmt.Errorf("time set day failed: %w", err)
+	}
 	return nil
 }
-
 
 func (c Client) DisableDayLock(ctx context.Context) error {
 	var cmd string
@@ -591,4 +590,75 @@ func (c Client) FillBlock(ctx context.Context, material string, sx, sy, sz, ex, 
 	}
 
 	return nil
+}
+
+// SummonVillager creates a villager entity with optional NBT data tags.
+func (c Client) SummonVillager(ctx context.Context, x, y, z int, id string, dataTagJSON string) error {
+	pos := fmt.Sprintf("%d %d %d", x, y, z)
+
+	// Start building the NBT data
+	nbtParts := []string{fmt.Sprintf(`CustomName:'{"text":"%s"}'`, id)}
+
+	// Add dataTag entries if provided
+	if dataTagJSON != "" {
+		// Parse the JSON and convert to NBT format
+		dataTag := make(map[string]interface{})
+		if err := json.Unmarshal([]byte(dataTagJSON), &dataTag); err != nil {
+			return fmt.Errorf("invalid JSON in dataTag: %w", err)
+		}
+
+		for key, value := range dataTag {
+			nbtParts = append(nbtParts, fmt.Sprintf(`%s:%s`, key, formatNBTValue(value)))
+		}
+	}
+
+	nbtData := fmt.Sprintf("{%s}", strings.Join(nbtParts, ","))
+	command := fmt.Sprintf("summon minecraft:villager %s %s", pos, nbtData)
+
+	_, err := c.client.SendCommand(command)
+	return err
+}
+
+// DeleteVillager removes a villager by its UUID tag.
+func (c Client) DeleteVillager(ctx context.Context, id string) error {
+	// Remove the villager by CustomName
+	command := fmt.Sprintf("kill @e[type=minecraft:villager,nbt={CustomName:'{\"text\":\"%s\"}'}]", id)
+	_, err := c.client.SendCommand(command)
+	return err
+}
+
+// formatNBTValue converts a Go value to NBT format
+func formatNBTValue(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return fmt.Sprintf(`"%s"`, v)
+	case int, int32, int64:
+		return fmt.Sprintf("%v", v)
+	case float32:
+		// Check if it's actually an integer value
+		if v == float32(int64(v)) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		return fmt.Sprintf("%.1f", v)
+	case float64:
+		// Check if it's actually an integer value
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		return fmt.Sprintf("%.1f", v)
+	case bool:
+		if v {
+			return "1b"
+		}
+		return "0b"
+	case map[string]interface{}:
+		// Handle nested objects like VillagerData:{profession:farmer,level:2}
+		var parts []string
+		for k, val := range v {
+			parts = append(parts, fmt.Sprintf(`%s:%s`, k, formatNBTValue(val)))
+		}
+		return fmt.Sprintf("{%s}", strings.Join(parts, ","))
+	default:
+		return fmt.Sprintf(`"%v"`, v)
+	}
 }
