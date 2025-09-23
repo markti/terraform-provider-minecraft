@@ -42,9 +42,3 @@ module "cube" {
     height = 3
   }
 }
-
-// ban a user
-resource "minecraft_ban" "example" {
-  player = "Goblin"
-  reason = "Griefing"
-}
