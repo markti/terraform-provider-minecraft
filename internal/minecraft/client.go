@@ -80,6 +80,56 @@ func (c Client) CreateEntity(ctx context.Context, entity string, position string
 	return nil
 }
 
+// CreateZombie summons a zombie with common zombie-specific NBT attributes.
+func (c Client) CreateZombie(
+	ctx context.Context,
+	position string,
+	id string,
+	isBaby bool,
+	canBreakDoors bool,
+	canPickUpLoot bool,
+	persistenceRequired bool,
+	health float32,
+) error {
+	// Helper to convert Go bool → NBT byte (0b / 1b)
+	boolToByte := func(b bool) int {
+		if b {
+			return 1
+		}
+		return 0
+	}
+
+	isBabyVal := boolToByte(isBaby)
+	canBreakDoorsVal := boolToByte(canBreakDoors)
+	canPickUpLootVal := boolToByte(canPickUpLoot)
+	persistenceRequiredVal := boolToByte(persistenceRequired)
+
+	// Build summon command for zombie
+	// Common zombie NBT tags:
+	// - IsBaby (byte): 1b if baby, 0b if adult
+	// - CanBreakDoors (byte): 1b to allow breaking doors
+	// - CanPickUpLoot (byte): 1b to allow picking up items
+	// - PersistenceRequired (byte): 1b to prevent despawn
+	// - Health (float): current health (default full health is 20.0f)
+	command := fmt.Sprintf(
+		`summon zombie %s {CustomName:'{"text":"%s"}',IsBaby:%db,CanBreakDoors:%db,CanPickUpLoot:%db,PersistenceRequired:%db,Health:%ff}`,
+		position,
+		id,
+		isBabyVal,
+		canBreakDoorsVal,
+		canPickUpLootVal,
+		persistenceRequiredVal,
+		health,
+	)
+
+	_, err := c.client.SendCommand(command)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Create Sheep
 func (c Client) CreateSheep(ctx context.Context, position string, id string, color string, sheared bool) error {
 	// Map sheep colors to their NBT integer values

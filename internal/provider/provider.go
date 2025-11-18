@@ -94,6 +94,7 @@ func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceT
 		"minecraft_gamemode": 	 gamemodeResourceType{},
 		"minecraft_daylock": 	 daylockResourceType{},
 		"minecraft_sheep": 		 sheepResourceType{},
+		"minecraft_zombie":  	 zombieResourceType{},
 	}, nil
 }
 
