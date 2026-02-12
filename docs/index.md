@@ -3,12 +3,10 @@
 page_title: "minecraft Provider"
 subcategory: ""
 description: |-
-  
+
 ---
 
 # minecraft Provider
-
-
 
 ## Example Usage
 

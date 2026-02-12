@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/provider"
+	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicraft/terraform-provider-minecraft/internal/minecraft"
 )
 
-var _ tfsdk.Provider = &provider{}
+var _ provider.Provider = &minecraftProvider{}
 
-type provider struct {
+type minecraftProvider struct {
 	address  string
 	password string
 
@@ -21,25 +23,46 @@ type provider struct {
 	version    string
 }
 
-type providerData struct {
+type minecraftProviderModel struct {
 	Address  types.String `tfsdk:"address"`
 	Password types.String `tfsdk:"password"`
 }
 
-func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderRequest, resp *tfsdk.ConfigureProviderResponse) {
-	var data providerData
-	diags := req.Config.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+func (p *minecraftProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "minecraft"
+	resp.Version = p.version
+}
+
+func (p *minecraftProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"address": schema.StringAttribute{
+				MarkdownDescription: "The RCON address of the Minecraft server",
+				Required:            true,
+			},
+			"password": schema.StringAttribute{
+				MarkdownDescription: "The RCON password of the Minecraft server",
+				Required:            true,
+				Sensitive:           true,
+			},
+		},
+	}
+}
+
+func (p *minecraftProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data minecraftProviderModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
 
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	var address string
-	if data.Address.Null {
+	if data.Address.IsNull() {
 		address = os.Getenv("MINECRAFT_ADDRESS")
 	} else {
-		address = data.Address.Value
+		address = data.Address.ValueString()
 	}
 
 	if address == "" {
@@ -51,10 +74,10 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	}
 
 	var password string
-	if data.Password.Null {
+	if data.Password.IsNull() {
 		password = os.Getenv("MINECRAFT_PASSWORD")
 	} else {
-		password = data.Password.Value
+		password = data.Password.ValueString()
 	}
 
 	if password == "" {
@@ -68,85 +91,50 @@ func (p *provider) Configure(ctx context.Context, req tfsdk.ConfigureProviderReq
 	p.address = address
 	p.password = password
 	p.configured = true
-}
 
-func (p *provider) GetClient(ctx context.Context) (*minecraft.Client, error) {
-	client, err := minecraft.New(p.address, p.password)
-	if err != nil {
-		return nil, err
+	if os.Getenv("MINECRAFT_SKIP_CONNECT") == "true" {
+		return
 	}
 
-	return client, nil
+	client, err := minecraft.New(p.address, p.password)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to create client",
+			fmt.Sprintf("An unexpected error was encountered trying to connect to the Minecraft server: %s", err.Error()),
+		)
+		return
+	}
+
+	resp.ResourceData = client
 }
 
-func (p *provider) GetResources(ctx context.Context) (map[string]tfsdk.ResourceType, diag.Diagnostics) {
-	return map[string]tfsdk.ResourceType{
-		"minecraft_block":       blockResourceType{},
-		"minecraft_entity":      entityResourceType{},
-		"minecraft_bed":         bedResourceType{},
-		"minecraft_stairs":      stairsResourceType{},
-		"minecraft_chest":       chestResourceType{},
-		"minecraft_team":        teamResourceType{},
-		"minecraft_team_member": teamMemberResourceType{},
-		"minecraft_fill":        fillResourceType{},
-		"minecraft_gamerule":    gameruleResourceType{},
-		"minecraft_op": 		 opResourceType{},
-		"minecraft_gamemode": 	 gamemodeResourceType{},
-		"minecraft_daylock": 	 daylockResourceType{},
-		"minecraft_sheep": 		 sheepResourceType{},
-		"minecraft_zombie":  	 zombieResourceType{},
-	}, nil
+func (p *minecraftProvider) Resources(ctx context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		NewBlockResource,
+		NewEntityResource,
+		NewBedResource,
+		NewStairsResource,
+		NewChestResource,
+		NewTeamResource,
+		NewTeamMemberResource,
+		NewFillResource,
+		NewGameruleResource,
+		NewOpResource,
+		NewGamemodeResource,
+		NewDaylockResource,
+		NewSheepResource,
+		NewZombieResource,
+	}
 }
 
-func (p *provider) GetDataSources(ctx context.Context) (map[string]tfsdk.DataSourceType, diag.Diagnostics) {
-	return map[string]tfsdk.DataSourceType{}, nil
+func (p *minecraftProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{}
 }
 
-func (p *provider) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		Attributes: map[string]tfsdk.Attribute{
-			"address": {
-				MarkdownDescription: "The RCON address of the Minecraft server",
-				Required:            true,
-				Type:                types.StringType,
-			},
-			"password": {
-				MarkdownDescription: "The RCON address of the Minecraft server",
-				Required:            true,
-				Type:                types.StringType,
-			},
-		},
-	}, nil
-}
-
-func New(version string) func() tfsdk.Provider {
-	return func() tfsdk.Provider {
-		return &provider{
+func New(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &minecraftProvider{
 			version: version,
 		}
 	}
-}
-
-func convertProviderType(in tfsdk.Provider) (provider, diag.Diagnostics) {
-	var diags diag.Diagnostics
-
-	p, ok := in.(*provider)
-
-	if !ok {
-		diags.AddError(
-			"Unexpected Provider Instance Type",
-			fmt.Sprintf("While creating the data source or resource, an unexpected provider type (%T) was received. This is always a bug in the provider code and should be reported to the provider developers.", p),
-		)
-		return provider{}, diags
-	}
-
-	if p == nil {
-		diags.AddError(
-			"Unexpected Provider Instance Type",
-			"While creating the data source or resource, an unexpected empty provider instance was received. This is always a bug in the provider code and should be reported to the provider developers.",
-		)
-		return provider{}, diags
-	}
-
-	return *p, diags
 }

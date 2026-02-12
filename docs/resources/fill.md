@@ -42,6 +42,7 @@ resource "minecraft_fill" "line" {
 - `id` (String) ID of the block
 
 <a id="nestedatt--end"></a>
+
 ### Nested Schema for `end`
 
 Required:
@@ -50,8 +51,8 @@ Required:
 - `y` (Number) Y coordinate of the block
 - `z` (Number) Z coordinate of the block
 
-
 <a id="nestedatt--start"></a>
+
 ### Nested Schema for `start`
 
 Required:
@@ -59,4 +60,3 @@ Required:
 - `x` (Number) X coordinate of the block
 - `y` (Number) Y coordinate of the block
 - `z` (Number) Z coordinate of the block
-

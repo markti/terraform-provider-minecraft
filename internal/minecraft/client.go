@@ -39,8 +39,8 @@ func (c Client) GetPlayer(ctx context.Context, name string) error {
 
 // Creates a block.
 func (c Client) CreateBlock(ctx context.Context, material string, x, y, z int) error {
-	command := fmt.Sprintf("setblock %d %d %d %s replace", x, y, z, material)
-	_, err := c.client.SendCommand(command)
+	cmd := fmt.Sprintf("setblock %d %d %d %s replace", x, y, z, material)
+	_, err := c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -50,8 +50,8 @@ func (c Client) CreateBlock(ctx context.Context, material string, x, y, z int) e
 
 // Deletes a block.
 func (c Client) DeleteBlock(ctx context.Context, x, y, z int) error {
-	command := fmt.Sprintf("setblock %d %d %d minecraft:air replace", x, y, z)
-	_, err := c.client.SendCommand(command)
+	cmd := fmt.Sprintf("setblock %d %d %d minecraft:air replace", x, y, z)
+	_, err := c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -71,8 +71,8 @@ func (c Client) CreateStairs(ctx context.Context, material string, x, y, z int, 
 
 // Creates an entity.
 func (c Client) CreateEntity(ctx context.Context, entity string, position string, id string) error {
-	command := fmt.Sprintf("summon %s %s {CustomName:'{\"text\":\"%s\"}'}", entity, position, id)
-	_, err := c.client.SendCommand(command)
+	cmd := fmt.Sprintf("summon %s %s {CustomName:'{\"text\":\"%s\"}'}", entity, position, id)
+	_, err := c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -164,13 +164,13 @@ func (c Client) CreateSheep(ctx context.Context, position string, id string, col
 		shearedVal = 1
 	}
 
-	// Build summon command
-	command := fmt.Sprintf(
+	// Build summon cmd
+	cmd := fmt.Sprintf(
 		`summon sheep %s {CustomName:'{"text":"%s"}',Color:%d,Sheared:%db}`,
 		position, id, colorVal, shearedVal,
 	)
 
-	_, err := c.client.SendCommand(command)
+	_, err := c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}
@@ -181,22 +181,21 @@ func (c Client) CreateSheep(ctx context.Context, position string, id string, col
 // Deletes an entity.
 func (c Client) DeleteEntity(ctx context.Context, entity string, position string, id string) error {
 	// Remove the entity.
-	command := fmt.Sprintf("kill @e[type=%s,nbt={CustomName:'{\"text\":\"%s\"}'}]", entity, id)
-	_, err := c.client.SendCommand(command)
+	cmd := fmt.Sprintf("kill @e[type=%s,nbt={CustomName:'{\"text\":\"%s\"}'}]", entity, id)
+	_, err := c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}
 
 	// Remove the entity from inventories.
-	command = fmt.Sprintf("clear @a %s{display:{Name:'{\"text\":\"%s\"}'}}", entity, id)
-	_, err = c.client.SendCommand(command)
+	cmd = fmt.Sprintf("clear @a %s{display:{Name:'{\"text\":\"%s\"}'}}", entity, id)
+	_, err = c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-
 
 // GameMode names keyed by the numeric values returned by Minecraft.
 var gameModeNames = map[int]string{
@@ -205,13 +204,14 @@ var gameModeNames = map[int]string{
 	2: "adventure",
 	3: "spectator",
 }
-///data get storage minecraft:server worldDefaultGameMode
+
+// /data get storage minecraft:server worldDefaultGameMode
 // GetDefaultGameMode queries the server for the world’s default game mode
 // and returns it as a lowercase string (e.g. "creative").
 func (c Client) GetDefaultGameMode(ctx context.Context) (string, error) {
 	out, err := c.client.SendCommand(`/data get storage minecraft:server worldDefaultGameMode`)
 	if err != nil {
-		return "", fmt.Errorf("send command: %w", err)
+		return "", fmt.Errorf("send cmd: %w", err)
 	}
 	// Typical output:
 	// Storage minecraft:server has the following data: {worldDefaultGameMode:1}
@@ -239,7 +239,7 @@ func (c Client) GetDefaultGameMode(ctx context.Context) (string, error) {
 func (c Client) GetUserGameMode(ctx context.Context, name string) (string, error) {
 	out, err := c.client.SendCommand(fmt.Sprintf(`/data get entity %s playerGameType`, name))
 	if err != nil {
-		return "", fmt.Errorf("send command: %w", err)
+		return "", fmt.Errorf("send cmd: %w", err)
 	}
 	// Look for the final colon and grab everything after it.
 	parts := strings.Split(out, ":")
@@ -267,7 +267,6 @@ func (c Client) SetDefaultGameMode(ctx context.Context, gamemode string) error {
 	return err
 }
 
-
 // Sets the user game mode
 func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name string) error {
 	var cmd string
@@ -278,22 +277,21 @@ func (c Client) SetUserGameMode(ctx context.Context, gamemode string, name strin
 }
 
 func (c Client) EnableDayLock(ctx context.Context) error {
-    // 1) Lock the time to day
-    if _, err := c.client.SendCommand("daylock true"); err != nil {
-        return fmt.Errorf("daylock true failed: %w", err)
-    }
+	// 1) Lock the time to day
+	if _, err := c.client.SendCommand("daylock true"); err != nil {
+		return fmt.Errorf("daylock true failed: %w", err)
+	}
 
-    // 2) Immediately set the world time to day
-    if _, err := c.client.SendCommand("time set day"); err != nil {
-        return fmt.Errorf("time set day failed: %w", err)
-    }
+	// 2) Immediately set the world time to day
+	if _, err := c.client.SendCommand("time set day"); err != nil {
+		return fmt.Errorf("time set day failed: %w", err)
+	}
 	return nil
 }
 
-
 func (c Client) DisableDayLock(ctx context.Context) error {
 	var cmd string
-	cmd = fmt.Sprintf(`daylock true`)
+	cmd = "daylock true"
 	_, err := c.client.SendCommand(cmd)
 	return err
 }
@@ -422,7 +420,7 @@ func (c Client) LeaveTeamTargets(ctx context.Context, targets ...string) error {
 // ---------- Convenience: players by name ----------
 
 func (c Client) JoinTeamPlayers(ctx context.Context, team string, players ...string) error {
-	// Players can be batched in one command
+	// Players can be batched in one cmd
 	return c.JoinTeamTargets(ctx, team, players...)
 }
 
@@ -634,8 +632,8 @@ func isIntRule(rule string) bool {
 }
 
 func (c Client) FillBlock(ctx context.Context, material string, sx, sy, sz, ex, ey, ez int) error {
-	command := fmt.Sprintf("fill %d %d %d %d %d %d %s hollow", sx, sy, sz, ex, ey, ez, material)
-	_, err := c.client.SendCommand(command)
+	cmd := fmt.Sprintf("fill %d %d %d %d %d %d %s hollow", sx, sy, sz, ex, ey, ez, material)
+	_, err := c.client.SendCommand(cmd)
 	if err != nil {
 		return err
 	}

@@ -44,6 +44,7 @@ resource "minecraft_chest" "example" {
 - `id` (String) ID of the chest
 
 <a id="nestedatt--position"></a>
+
 ### Nested Schema for `position`
 
 Required:

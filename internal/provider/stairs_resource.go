@@ -4,233 +4,233 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicraft/terraform-provider-minecraft/internal/minecraft"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces
-var _ tfsdk.ResourceType = stairsResourceType{}
-var _ tfsdk.Resource = stairsResource{}
-var _ tfsdk.ResourceWithImportState = stairsResource{}
+var _ resource.Resource = (*stairsResource)(nil)
+var _ resource.ResourceWithImportState = (*stairsResource)(nil)
 
-type stairsResourceType struct{}
-
-func (t stairsResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		MarkdownDescription: "A Minecraft stairs block (e.g., minecraft:oak_stairs) with orientation and shape.",
-		Attributes: map[string]tfsdk.Attribute{
-			"material": {
-				MarkdownDescription: "The stairs material (e.g., `minecraft:oak_stairs`, `minecraft:stone_brick_stairs`).",
-				Required:            true,
-				Type:                types.StringType,
-			},
-			"position": {
-				MarkdownDescription: "The position of the stairs block.",
-				Required:            true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"x": {
-						MarkdownDescription: "X coordinate of the block",
-						Type:                types.NumberType,
-						Required:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.RequiresReplace(),
-						},
-					},
-					"y": {
-						MarkdownDescription: "Y coordinate of the block",
-						Type:                types.NumberType,
-						Required:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.RequiresReplace(),
-						},
-					},
-					"z": {
-						MarkdownDescription: "Z coordinate of the block",
-						Type:                types.NumberType,
-						Required:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.RequiresReplace(),
-						},
-					},
-				}),
-			},
-
-			// Stairs block states
-			"facing": {
-				MarkdownDescription: "Direction the stairs face: one of `north`, `south`, `east`, `west`.",
-				Required:            true,
-				Type:                types.StringType,
-			},
-			"half": {
-				MarkdownDescription: "Whether the stairs are on the `top` (upside-down) or `bottom` half.",
-				Required:            true,
-				Type:                types.StringType,
-			},
-			"shape": {
-				MarkdownDescription: "Stair shape: `straight`, `inner_left`, `inner_right`, `outer_left`, or `outer_right`.",
-				Required:            true,
-				Type:                types.StringType,
-			},
-			"waterlogged": {
-				MarkdownDescription: "Whether the stairs are waterlogged.",
-				Optional:            true,
-				Type:                types.BoolType,
-			},
-
-			"id": {
-				Computed:            true,
-				MarkdownDescription: "ID of the block",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
-				},
-				Type: types.StringType,
-			},
-		},
-	}, nil
-}
-
-func (t stairsResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
-	return stairsResource{provider: provider}, diags
-}
-
-type stairsResourceData struct {
-	Id       types.String `tfsdk:"id"`
-	Material string       `tfsdk:"material"`
+type stairsResourceModel struct {
+	ID       types.String `tfsdk:"id"`
+	Material types.String `tfsdk:"material"`
 	Position struct {
-		X int `tfsdk:"x"`
-		Y int `tfsdk:"y"`
-		Z int `tfsdk:"z"`
+		X types.Int32 `tfsdk:"x"`
+		Y types.Int32 `tfsdk:"y"`
+		Z types.Int32 `tfsdk:"z"`
 	} `tfsdk:"position"`
-
-	Facing      string `tfsdk:"facing"`      // north|south|east|west
-	Half        string `tfsdk:"half"`        // top|bottom
-	Shape       string `tfsdk:"shape"`       // straight|inner_left|inner_right|outer_left|outer_right
-	Waterlogged *bool  `tfsdk:"waterlogged"` // optional
+	Facing      types.String `tfsdk:"facing"`
+	Half        types.String `tfsdk:"half"`
+	Shape       types.String `tfsdk:"shape"`
+	Waterlogged types.Bool   `tfsdk:"waterlogged"`
 }
 
 type stairsResource struct {
-	provider provider
+	client *minecraft.Client
 }
 
-func (r stairsResource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
-	var data stairsResourceData
-	diags := req.Config.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+func NewStairsResource() resource.Resource {
+	return &stairsResource{}
+}
+
+func (r *stairsResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_stairs"
+}
+
+func (r *stairsResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "A Minecraft stairs block (e.g., minecraft:oak_stairs) with orientation and shape.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "ID of the stairs block.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"material": schema.StringAttribute{
+				MarkdownDescription: "The stairs material (e.g., `minecraft:oak_stairs`, `minecraft:stone_brick_stairs`).",
+				Required:            true,
+			},
+			"position": schema.SingleNestedAttribute{
+				MarkdownDescription: "The position of the stairs block.",
+				Required:            true,
+				Attributes: map[string]schema.Attribute{
+					"x": schema.Int32Attribute{
+						MarkdownDescription: "X coordinate of the block",
+						Required:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.RequiresReplace(),
+						},
+					},
+					"y": schema.Int32Attribute{
+						MarkdownDescription: "Y coordinate of the block",
+						Required:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.RequiresReplace(),
+						},
+					},
+					"z": schema.Int32Attribute{
+						MarkdownDescription: "Z coordinate of the block",
+						Required:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.RequiresReplace(),
+						},
+					},
+				},
+			},
+			"facing": schema.StringAttribute{
+				MarkdownDescription: "Direction the stairs face: one of `north`, `south`, `east`, `west`.",
+				Required:            true,
+			},
+			"half": schema.StringAttribute{
+				MarkdownDescription: "Whether the stairs are on the `top` (upside-down) or `bottom` half.",
+				Required:            true,
+			},
+			"shape": schema.StringAttribute{
+				MarkdownDescription: "Stair shape: `straight`, `inner_left`, `inner_right`, `outer_left`, or `outer_right`.",
+				Required:            true,
+			},
+			"waterlogged": schema.BoolAttribute{
+				MarkdownDescription: "Whether the stairs are waterlogged. Defaults to false.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+			},
+		},
+	}
+}
+
+func (r *stairsResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*minecraft.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *minecraft.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.client = client
+}
+
+func (r *stairsResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data stairsResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client, got error: %s", err))
-		return
-	}
-
-	water := false
-	if data.Waterlogged != nil {
-		water = *data.Waterlogged
-	}
-
-	// Optional: guard materials if you want
-	// if !strings.HasSuffix(data.Material, "_stairs") {
-	// 	resp.Diagnostics.AddError("Validation Error", "material must be a *_stairs block")
-	// 	return
-	// }
-
-	err = client.CreateStairs(
+	err := r.client.CreateStairs(
 		ctx,
-		data.Material,
-		data.Position.X, data.Position.Y, data.Position.Z,
-		// pass through as-is; server expects valid values
-		data.Facing,
-		data.Half,
-		data.Shape,
-		water,
+		data.Material.ValueString(),
+		int(data.Position.X.ValueInt32()), int(data.Position.Y.ValueInt32()), int(data.Position.Z.ValueInt32()),
+		data.Facing.ValueString(),
+		data.Half.ValueString(),
+		data.Shape.ValueString(),
+		data.Waterlogged.ValueBool(),
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create stairs, got error: %s", err))
 		return
 	}
 
-	data.Id = types.String{Value: fmt.Sprintf("stairs-%d-%d-%d", data.Position.X, data.Position.Y, data.Position.Z)}
-	diags = resp.State.Set(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	data.ID = types.StringValue(fmt.Sprintf("stairs-%d-%d-%d", data.Position.X.ValueInt32(), data.Position.Y.ValueInt32(), data.Position.Z.ValueInt32()))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// Read is a no-op; we don’t query Minecraft state (no stable read API).
-func (r stairsResource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
-	var data stairsResourceData
-	diags := req.State.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
+func (r *stairsResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
-	diags = resp.State.Set(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-}
 
-func (r stairsResource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	var data stairsResourceData
-	diags := req.Plan.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	var data stairsResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client, got error: %s", err))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *stairsResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
 
-	water := false
-	if data.Waterlogged != nil {
-		water = *data.Waterlogged
+	var data stairsResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	err = client.CreateStairs(
+	err := r.client.CreateStairs(
 		ctx,
-		data.Material,
-		data.Position.X, data.Position.Y, data.Position.Z,
-		data.Facing,
-		data.Half,
-		data.Shape,
-		water,
+		data.Material.ValueString(),
+		int(data.Position.X.ValueInt32()), int(data.Position.Y.ValueInt32()), int(data.Position.Z.ValueInt32()),
+		data.Facing.ValueString(),
+		data.Half.ValueString(),
+		data.Shape.ValueString(),
+		data.Waterlogged.ValueBool(),
 	)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update stairs, got error: %s", err))
 		return
 	}
 
-	diags = resp.State.Set(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r stairsResource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	var data stairsResourceData
-	diags := req.State.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+func (r *stairsResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data stairsResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
+	err := r.client.DeleteBlock(ctx, int(data.Position.X.ValueInt32()), int(data.Position.Y.ValueInt32()), int(data.Position.Z.ValueInt32()))
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client, got error: %s", err))
-		return
-	}
-
-	// Replace with air
-	err = client.DeleteBlock(ctx, data.Position.X, data.Position.Y, data.Position.Z)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete block, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete stairs, got error: %s", err))
 		return
 	}
 }
 
-func (r stairsResource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+func (r *stairsResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
+

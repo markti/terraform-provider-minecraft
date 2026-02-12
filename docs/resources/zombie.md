@@ -14,8 +14,8 @@ This resource allows you to:
 - **Control** persistence, loot pickup, and health.
 - **Destroy** the zombie when the resource is removed.
 
-> ⚠️ **Warning:**  
-> Baby zombies are tiny, fast, and extremely rude.  
+> ⚠️ **Warning:**
+> Baby zombies are tiny, fast, and extremely rude.
 > **NEVER** set `is_baby = true` unless you are fully prepared for chaos.
 
 ## Example Usage
@@ -76,31 +76,31 @@ resource "minecraft_zombie" "tiny_terror" {
 
 ## Argument Reference
 
-- **position** (Required, Block)  
+- **position** (Required, Block)
   The coordinates where the zombie will be summoned. All fields are required:
-  - **x** (Number) – X coordinate.  
-  - **y** (Number) – Y coordinate.  
-  - **z** (Number) – Z coordinate.
+  - **x** (Number) - X coordinate.
+  - **y** (Number) - Y coordinate.
+  - **z** (Number) - Z coordinate.
 
-- **is_baby** (Optional, Boolean)  
-  Whether the zombie is a baby. Defaults to `false`.  
+- **is_baby** (Optional, Boolean)
+  Whether the zombie is a baby. Defaults to `false`.
   **NEVER** set this to `true` unless you enjoy being chased by a half-height blur of pure hostility.
 
-- **can_break_doors** (Optional, Boolean)  
+- **can_break_doors** (Optional, Boolean)
   Whether the zombie can break wooden doors. Defaults to `false`.
 
-- **can_pick_up_loot** (Optional, Boolean)  
+- **can_pick_up_loot** (Optional, Boolean)
   Whether the zombie can pick up items from the ground. Defaults to `false`.
 
-- **persistence_required** (Optional, Boolean)  
+- **persistence_required** (Optional, Boolean)
   Prevents the zombie from naturally despawning. Defaults to `false`.
 
-- **health** (Optional, Float)  
+- **health** (Optional, Float)
   The zombie's health value. Defaults to `20.0`.
 
 ## Attribute Reference
 
-- **id** (Computed, String)  
+- **id** (Computed, String)
   A stable UUID used to tag and identify the zombie in the Minecraft world.
 
 ---
@@ -125,6 +125,7 @@ resource "minecraft_zombie" "tiny_terror" {
 - `id` (String) A stable UUID used to tag and identify the zombie in the Minecraft world.
 
 <a id="nestedatt--position"></a>
+
 ### Nested Schema for `position`
 
 Required:

@@ -8,7 +8,7 @@ description: |-
 
 # minecraft_team_member (Resource)
 
-Manage membership of a Minecraft **scoreboard team**.  
+Manage membership of a Minecraft **scoreboard team**.
 Exactly one of `player`, `selector`, or `entity_custom_name` must be set.
 
 ## Example Usage

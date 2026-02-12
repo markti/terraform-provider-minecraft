@@ -5,83 +5,19 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicraft/terraform-provider-minecraft/internal/minecraft"
 )
 
-// Ensure types satisfy framework interfaces
-var _ tfsdk.ResourceType = teamResourceType{}
-var _ tfsdk.Resource = teamResource{}
-var _ tfsdk.ResourceWithImportState = teamResource{}
+var _ resource.Resource = (*teamResource)(nil)
+var _ resource.ResourceWithImportState = (*teamResource)(nil)
 
-// -------- Resource Type --------
-
-type teamResourceType struct{}
-
-func (t teamResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		MarkdownDescription: "A Minecraft scoreboard team managed via RCON.",
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.StringType,
-				Computed:            true,
-				MarkdownDescription: "Resource ID (same as `name`).",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
-				},
-			},
-			"name": {
-				Type:                types.StringType,
-				Required:            true,
-				MarkdownDescription: "Team name (identifier).",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(), // renaming team => ForceNew
-				},
-			},
-			"display_name": {
-				Type:                types.StringType,
-				Optional:            true,
-				MarkdownDescription: "Display name shown in UI (defaults to `name`).",
-			},
-			"color": {
-				Type:                types.StringType,
-				Optional:            true,
-				MarkdownDescription: "Team color (e.g. `red`, `blue`, `gold`, `dark_purple`, etc.).",
-			},
-			"friendly_fire": {
-				Type:                types.BoolType,
-				Optional:            true,
-				MarkdownDescription: "Whether teammates can damage each other.",
-			},
-			"see_friendly_invisibles": {
-				Type:                types.BoolType,
-				Optional:            true,
-				MarkdownDescription: "If true, teammates can see each other when invisible.",
-			},
-			"nametag_visibility": {
-				Type:                types.StringType,
-				Optional:            true,
-				MarkdownDescription: "One of `always`, `never`, `hideForOtherTeams`, `hideForOwnTeam`.",
-			},
-			"collision_rule": {
-				Type:                types.StringType,
-				Optional:            true,
-				MarkdownDescription: "One of `always`, `never`, `pushOtherTeams`, `pushOwnTeam`.",
-			},
-		},
-	}, nil
-}
-
-func (t teamResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	p, diags := convertProviderType(in)
-	return teamResource{provider: p}, diags
-}
-
-// -------- Data & Resource --------
-
-type teamResourceData struct {
+type teamResourceModel struct {
 	ID                    types.String `tfsdk:"id"`
 	Name                  types.String `tfsdk:"name"`
 	DisplayName           types.String `tfsdk:"display_name"`
@@ -93,131 +29,236 @@ type teamResourceData struct {
 }
 
 type teamResource struct {
-	provider provider
+	client *minecraft.Client
 }
 
-// -------- CRUD --------
+func NewTeamResource() resource.Resource {
+	return &teamResource{}
+}
 
-func (r teamResource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
-	var plan teamResourceData
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+func (r *teamResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_team"
+}
+
+func (r *teamResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "A Minecraft scoreboard team managed via RCON.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "Resource ID (same as `name`).",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"name": schema.StringAttribute{
+				MarkdownDescription: "Team name (identifier).",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"display_name": schema.StringAttribute{
+				MarkdownDescription: "Display name shown in UI (defaults to `name`).",
+				Optional:            true,
+			},
+			"color": schema.StringAttribute{
+				MarkdownDescription: "Team color (e.g. `red`, `blue`, `gold`, `dark_purple`, etc.).",
+				Optional:            true,
+			},
+			"friendly_fire": schema.BoolAttribute{
+				MarkdownDescription: "Whether teammates can damage each other.",
+				Optional:            true,
+			},
+			"see_friendly_invisibles": schema.BoolAttribute{
+				MarkdownDescription: "If true, teammates can see each other when invisible.",
+				Optional:            true,
+			},
+			"nametag_visibility": schema.StringAttribute{
+				MarkdownDescription: "One of `always`, `never`, `hideForOtherTeams`, `hideForOwnTeam`.",
+				Optional:            true,
+			},
+			"collision_rule": schema.StringAttribute{
+				MarkdownDescription: "One of `always`, `never`, `pushOtherTeams`, `pushOwnTeam`.",
+				Optional:            true,
+			},
+		},
+	}
+}
+
+func (r *teamResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*minecraft.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *minecraft.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.client = client
+}
+
+func (r *teamResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data teamResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
+	name := strings.TrimSpace(data.Name.ValueString())
+	if name == "" {
+		resp.Diagnostics.AddError("Validation Error", "Attribute `name` cannot be empty or whitespace.")
 		return
 	}
 
-	name := strings.TrimSpace(plan.Name.Value)
 	display := name
-	if !plan.DisplayName.Null && plan.DisplayName.Value != "" {
-		display = plan.DisplayName.Value
+	if !data.DisplayName.IsNull() && !data.DisplayName.IsUnknown() {
+		if trimmed := strings.TrimSpace(data.DisplayName.ValueString()); trimmed != "" {
+			display = trimmed
+		}
 	}
 
-	// Create team
-	if err := client.CreateTeam(ctx, name, display); err != nil {
+	if err := r.client.CreateTeam(ctx, name, display); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create team: %s", err))
 		return
 	}
 
-	// Apply options present in plan
-	if err := applyTeamOptions(ctx, client, name, plan, &resp.Diagnostics); err != nil {
+	if err := applyTeamOptions(ctx, r.client, name, data); err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
 
-	plan.ID = types.String{Value: name}
-	diags = resp.State.Set(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+	data.ID = types.StringValue(name)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r teamResource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
-	// Minimal read; keep state as-is. (Add drift detection later by parsing `/team list`.)
-	var state teamResourceData
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
+func (r *teamResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
-	diags = resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-}
 
-func (r teamResource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	var plan, state teamResourceData
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-	diags = req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	var data teamResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *teamResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
 
-	name := strings.TrimSpace(plan.Name.Value)
+	var plan, state teamResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
-	// display_name change
-	if !equalString(plan.DisplayName, state.DisplayName) {
+	name := strings.TrimSpace(plan.Name.ValueString())
+	if name == "" {
+		resp.Diagnostics.AddError("Validation Error", "Attribute `name` cannot be empty or whitespace.")
+		return
+	}
+
+	if !stringValuesEqual(plan.DisplayName, state.DisplayName) {
 		display := name
-		if !plan.DisplayName.Null && plan.DisplayName.Value != "" {
-			display = plan.DisplayName.Value
+		if !plan.DisplayName.IsNull() && !plan.DisplayName.IsUnknown() {
+			if trimmed := strings.TrimSpace(plan.DisplayName.ValueString()); trimmed != "" {
+				display = trimmed
+			}
 		}
-		if err := client.SetTeamDisplayName(ctx, name, display); err != nil {
+		if err := r.client.SetTeamDisplayName(ctx, name, display); err != nil {
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to set displayName: %s", err))
 			return
 		}
 	}
 
-	// Apply (or re-apply) the rest of the options
-	if err := applyTeamOptions(ctx, client, name, plan, &resp.Diagnostics); err != nil {
+	if err := applyTeamOptions(ctx, r.client, name, plan); err != nil {
+		resp.Diagnostics.AddError("Client Error", err.Error())
 		return
 	}
 
-	diags = resp.State.Set(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+	if plan.ID.IsNull() || plan.ID.IsUnknown() {
+		plan.ID = types.StringValue(name)
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
-func (r teamResource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	var state teamResourceData
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+func (r *teamResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var state teamResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
+	name := strings.TrimSpace(state.Name.ValueString())
+	if name == "" {
+		name = strings.TrimSpace(state.ID.ValueString())
+	}
+	if name == "" {
+		resp.Diagnostics.AddError("Validation Error", "Missing team name for delete.")
 		return
 	}
 
-	if err := client.DeleteTeam(ctx, state.Name.Value); err != nil {
+	if err := r.client.DeleteTeam(ctx, name); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete team: %s", err))
 		return
 	}
 }
 
-func (r teamResource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Import by team name into `id`; user config supplies `name`.
-	// (Or you can set both name and id here if you prefer strict import.)
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+func (r *teamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	name := strings.TrimSpace(req.ID)
+	if name == "" {
+		resp.Diagnostics.AddError("Import Error", "Expected non-empty team name as import ID.")
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), name)...)
 }
 
-// -------- Helpers --------
-
-func equalString(a, b types.String) bool {
-	if a.Null && b.Null {
+func stringValuesEqual(a, b types.String) bool {
+	if a.IsNull() && b.IsNull() {
 		return true
 	}
-	return a.Value == b.Value
+	if a.IsUnknown() || b.IsUnknown() {
+		return false
+	}
+	return a.ValueString() == b.ValueString()
 }
 
 type teamOptionClient interface {
@@ -231,41 +272,32 @@ type teamOptionClient interface {
 	DeleteTeam(ctx context.Context, name string) error
 }
 
-func applyTeamOptions(ctx context.Context, c teamOptionClient, name string, d teamResourceData, diags *diag.Diagnostics) error {
-	// color
-	if !d.Color.Null && d.Color.Value != "" {
-		if err := c.SetTeamColor(ctx, name, strings.ToLower(d.Color.Value)); err != nil {
-			diags.AddError("Client Error", fmt.Sprintf("Unable to set color: %s", err))
-			return err
+func applyTeamOptions(ctx context.Context, c teamOptionClient, name string, d teamResourceModel) error {
+	if !d.Color.IsNull() && !d.Color.IsUnknown() && strings.TrimSpace(d.Color.ValueString()) != "" {
+		if err := c.SetTeamColor(ctx, name, strings.ToLower(d.Color.ValueString())); err != nil {
+			return fmt.Errorf("unable to set color: %w", err)
 		}
 	}
-	// friendlyFire
-	if !d.FriendlyFire.Null {
-		if err := c.SetTeamFriendlyFire(ctx, name, d.FriendlyFire.Value); err != nil {
-			diags.AddError("Client Error", fmt.Sprintf("Unable to set friendlyFire: %s", err))
-			return err
+	if !d.FriendlyFire.IsNull() && !d.FriendlyFire.IsUnknown() {
+		if err := c.SetTeamFriendlyFire(ctx, name, d.FriendlyFire.ValueBool()); err != nil {
+			return fmt.Errorf("unable to set friendlyFire: %w", err)
 		}
 	}
-	// seeFriendlyInvisibles
-	if !d.SeeFriendlyInvisibles.Null {
-		if err := c.SetTeamSeeFriendlyInvisibles(ctx, name, d.SeeFriendlyInvisibles.Value); err != nil {
-			diags.AddError("Client Error", fmt.Sprintf("Unable to set seeFriendlyInvisibles: %s", err))
-			return err
+	if !d.SeeFriendlyInvisibles.IsNull() && !d.SeeFriendlyInvisibles.IsUnknown() {
+		if err := c.SetTeamSeeFriendlyInvisibles(ctx, name, d.SeeFriendlyInvisibles.ValueBool()); err != nil {
+			return fmt.Errorf("unable to set seeFriendlyInvisibles: %w", err)
 		}
 	}
-	// nametagVisibility
-	if !d.NametagVisibility.Null && d.NametagVisibility.Value != "" {
-		if err := c.SetTeamNametagVisibility(ctx, name, d.NametagVisibility.Value); err != nil {
-			diags.AddError("Client Error", fmt.Sprintf("Unable to set nametagVisibility: %s", err))
-			return err
+	if !d.NametagVisibility.IsNull() && !d.NametagVisibility.IsUnknown() && strings.TrimSpace(d.NametagVisibility.ValueString()) != "" {
+		if err := c.SetTeamNametagVisibility(ctx, name, d.NametagVisibility.ValueString()); err != nil {
+			return fmt.Errorf("unable to set nametagVisibility: %w", err)
 		}
 	}
-	// collisionRule
-	if !d.CollisionRule.Null && d.CollisionRule.Value != "" {
-		if err := c.SetTeamCollisionRule(ctx, name, d.CollisionRule.Value); err != nil {
-			diags.AddError("Client Error", fmt.Sprintf("Unable to set collisionRule: %s", err))
-			return err
+	if !d.CollisionRule.IsNull() && !d.CollisionRule.IsUnknown() && strings.TrimSpace(d.CollisionRule.ValueString()) != "" {
+		if err := c.SetTeamCollisionRule(ctx, name, d.CollisionRule.ValueString()); err != nil {
+			return fmt.Errorf("unable to set collisionRule: %w", err)
 		}
 	}
 	return nil
 }
+

@@ -5,170 +5,192 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicraft/terraform-provider-minecraft/internal/minecraft"
 )
 
-// Ensure provider defined types fully satisfy framework interfaces
-var _ tfsdk.ResourceType = entityResourceType{}
-var _ tfsdk.Resource = entityResource{}
-var _ tfsdk.ResourceWithImportState = entityResource{}
+var _ resource.Resource = (*entityResource)(nil)
+var _ resource.ResourceWithImportState = (*entityResource)(nil)
 
-type entityResourceType struct{}
-
-func (t entityResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		MarkdownDescription: "A Minecraft entity, summoned and tracked by a stable UUID.",
-
-		Attributes: map[string]tfsdk.Attribute{
-			"type": {
-				MarkdownDescription: "The entity type (e.g. `minecraft:armor_stand`, `minecraft:text_display`).",
-				Required:            true,
-				Type:                types.StringType,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(), // entity kind can't change in-place
-				},
-			},
-			"position": {
-				MarkdownDescription: "The position to summon the entity at.",
-				Required:            true,
-				Attributes: tfsdk.SingleNestedAttributes(map[string]tfsdk.Attribute{
-					"x": {
-						MarkdownDescription: "X coordinate",
-						Type:                types.NumberType,
-						Required:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.RequiresReplace(),
-						},
-					},
-					"y": {
-						MarkdownDescription: "Y coordinate",
-						Type:                types.NumberType,
-						Required:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.RequiresReplace(),
-						},
-					},
-					"z": {
-						MarkdownDescription: "Z coordinate",
-						Type:                types.NumberType,
-						Required:            true,
-						PlanModifiers: tfsdk.AttributePlanModifiers{
-							tfsdk.RequiresReplace(),
-						},
-					},
-				}),
-			},
-			"id": {
-				Computed:            true,
-				MarkdownDescription: "UUID for this entity (also embedded as the entity's CustomName/tag).",
-				Type:                types.StringType,
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
-				},
-			},
-		},
-	}, nil
-}
-
-func (t entityResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	provider, diags := convertProviderType(in)
-	return entityResource{provider: provider}, diags
-}
-
-type entityResourceData struct {
-	Id       types.String `tfsdk:"id"`
-	Type     string       `tfsdk:"type"`
+type entityResourceModel struct {
+	ID       types.String `tfsdk:"id"`
+	Type     types.String `tfsdk:"type"`
 	Position struct {
-		X int `tfsdk:"x"`
-		Y int `tfsdk:"y"`
-		Z int `tfsdk:"z"`
+		X types.Int32 `tfsdk:"x"`
+		Y types.Int32 `tfsdk:"y"`
+		Z types.Int32 `tfsdk:"z"`
 	} `tfsdk:"position"`
 }
 
 type entityResource struct {
-	provider provider
+	client *minecraft.Client
 }
 
-func (r entityResource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
-	var data entityResourceData
-	diags := req.Config.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+func NewEntityResource() resource.Resource {
+	return &entityResource{}
+}
+
+func (r *entityResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_entity"
+}
+
+func (r *entityResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "A Minecraft entity, summoned and tracked by a stable UUID.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "UUID for this entity (also embedded as the entity's CustomName/tag).",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"type": schema.StringAttribute{
+				MarkdownDescription: "The entity type (e.g. `minecraft:armor_stand`, `minecraft:text_display`).",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"position": schema.SingleNestedAttribute{
+				MarkdownDescription: "The position to summon the entity at.",
+				Required:            true,
+				Attributes: map[string]schema.Attribute{
+					"x": schema.Int32Attribute{
+						MarkdownDescription: "X coordinate",
+						Required:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.RequiresReplace(),
+						},
+					},
+					"y": schema.Int32Attribute{
+						MarkdownDescription: "Y coordinate",
+						Required:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.RequiresReplace(),
+						},
+					},
+					"z": schema.Int32Attribute{
+						MarkdownDescription: "Z coordinate",
+						Required:            true,
+						PlanModifiers: []planmodifier.Int32{
+							int32planmodifier.RequiresReplace(),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (r *entityResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*minecraft.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *minecraft.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.client = client
+}
+
+func (r *entityResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data entityResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
-		return
-	}
-
-	// Generate a stable UUID and use it as both TF id and the entity's tag/CustomName.
 	id := uuid.NewString()
-	pos := fmt.Sprintf("%d %d %d", data.Position.X, data.Position.Y, data.Position.Z)
-
-	if err := client.CreateEntity(ctx, data.Type, pos, id); err != nil {
+	pos := fmt.Sprintf("%d %d %d", data.Position.X.ValueInt32(), data.Position.Y.ValueInt32(), data.Position.Z.ValueInt32())
+	if err := r.client.CreateEntity(ctx, data.Type.ValueString(), pos, id); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to summon entity: %s", err))
 		return
 	}
 
-	data.Id = types.String{Value: id}
-
-	diags = resp.State.Set(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	data.ID = types.StringValue(id)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r entityResource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
-	var data entityResourceData
-	diags := req.State.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+func (r *entityResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data entityResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// TODO: Implement drift detection via a client.GetEntity(ctx, type, id) that searches by tag/CustomName.
-	// For now, keep state unchanged.
-	diags = resp.State.Set(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r entityResource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	// All mutable fields are ForceNew; there's nothing to update in place.
-	var data entityResourceData
-	diags := req.Plan.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
+func (r *entityResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
-	diags = resp.State.Set(ctx, &data)
-	resp.Diagnostics.Append(diags...)
-}
 
-func (r entityResource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	var data entityResourceData
-	diags := req.State.Get(ctx, &data)
-	resp.Diagnostics.Append(diags...)
+	var data entityResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *entityResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
 
-	pos := fmt.Sprintf("%d %d %d", data.Position.X, data.Position.Y, data.Position.Z)
-	if err := client.DeleteEntity(ctx, data.Type, pos, data.Id.Value); err != nil {
+	var data entityResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	pos := fmt.Sprintf("%d %d %d", data.Position.X.ValueInt32(), data.Position.Y.ValueInt32(), data.Position.Z.ValueInt32())
+	if err := r.client.DeleteEntity(ctx, data.Type.ValueString(), pos, data.ID.ValueString()); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete entity: %s", err))
 		return
 	}
 }
 
-func (r entityResource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Import by UUID (id). Caller supplies matching config (type/position) in HCL.
-	tfsdk.ResourceImportStatePassthroughID(ctx, tftypes.NewAttributePath().WithAttributeName("id"), req, resp)
+func (r *entityResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
+

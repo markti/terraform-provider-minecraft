@@ -10,9 +10,9 @@ Manages a sheep entity in a Minecraft Java server.
 
 This resource allows you to:
 
--   **Summon** a sheep at a given set of coordinates.
--   **Customize** its wool color and initial sheared state.
--   **Destroy** the sheep when the resource is removed.
+- **Summon** a sheep at a given set of coordinates.
+- **Customize** its wool color and initial sheared state.
+- **Destroy** the sheep when the resource is removed.
 
 ## Example Usage
 
@@ -46,24 +46,24 @@ resource "minecraft_sheep" "shorny" {
 
 ## Argument Reference
 
--   **position** (Required, Block)\
+- **position** (Required, Block)\
     The coordinates where the sheep will be summoned. All fields are
     required:
 
-    -   **x** (Number) -- X coordinate.
-    -   **y** (Number) -- Y coordinate.
-    -   **z** (Number) -- Z coordinate.
+  - **x** (Number) -- X coordinate.
+  - **y** (Number) -- Y coordinate.
+  - **z** (Number) -- Z coordinate.
 
--   **color** (Required, String)\
+- **color** (Required, String)\
     The wool color of the sheep. One of:\
     `white, orange, magenta, light_blue, yellow, lime, pink, gray, light_gray, cyan, purple, blue, brown, green, red, black`.
 
--   **sheared** (Optional, Boolean)\
+- **sheared** (Optional, Boolean)\
     Whether the sheep is summoned in a sheared state. Defaults to
     `false`.
 
 ## Attribute Reference
 
--   **id** (Computed, String)\
+- **id** (Computed, String)\
     A stable UUID used to tag and identify the sheep in the Minecraft
     world.

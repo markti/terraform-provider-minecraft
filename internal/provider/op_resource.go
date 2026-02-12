@@ -5,161 +5,174 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	"github.com/hashicraft/terraform-provider-minecraft/internal/minecraft"
 )
 
-// Ensure types satisfy framework interfaces
-var _ tfsdk.ResourceType = opResourceType{}
-var _ tfsdk.Resource = opResource{}
-var _ tfsdk.ResourceWithImportState = opResource{}
+var _ resource.Resource = (*opResource)(nil)
+var _ resource.ResourceWithImportState = (*opResource)(nil)
 
-// -------- Resource Type --------
-
-type opResourceType struct{}
-
-func (t opResourceType) GetSchema(ctx context.Context) (tfsdk.Schema, diag.Diagnostics) {
-	return tfsdk.Schema{
-		MarkdownDescription: "Grants or revokes Minecraft server operator (op) status for a player.",
-		Attributes: map[string]tfsdk.Attribute{
-			"id": {
-				Type:                types.StringType,
-				Computed:            true,
-				MarkdownDescription: "Resource ID (same as `player`).",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.UseStateForUnknown(),
-				},
-			},
-			"player": {
-				Type:                types.StringType,
-				Required:            true,
-				MarkdownDescription: "Minecraft player username to grant operator privileges to.",
-				PlanModifiers: tfsdk.AttributePlanModifiers{
-					tfsdk.RequiresReplace(), // changing player => ForceNew
-				},
-			},
-		},
-	}, nil
-}
-
-func (t opResourceType) NewResource(ctx context.Context, in tfsdk.Provider) (tfsdk.Resource, diag.Diagnostics) {
-	p, diags := convertProviderType(in)
-	return opResource{provider: p}, diags
-}
-
-// -------- Data & Resource --------
-
-type opResourceData struct {
+type opResourceModel struct {
 	ID     types.String `tfsdk:"id"`
 	Player types.String `tfsdk:"player"`
 }
 
 type opResource struct {
-	provider provider
+	client *minecraft.Client
 }
 
-// Define the minimal client surface we need (helps with testing/mocking)
-type opClient interface {
-	CreateOp(ctx context.Context, name string) error
-	RemoveOp(ctx context.Context, name string) error
+func NewOpResource() resource.Resource {
+	return &opResource{}
 }
 
-// -------- CRUD --------
+func (r *opResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_op"
+}
 
-func (r opResource) Create(ctx context.Context, req tfsdk.CreateResourceRequest, resp *tfsdk.CreateResourceResponse) {
-	var plan opResourceData
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+func (r *opResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		MarkdownDescription: "Grants or revokes Minecraft server operator (op) status for a player.",
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				MarkdownDescription: "Resource ID (same as `player`).",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"player": schema.StringAttribute{
+				MarkdownDescription: "Minecraft player username to grant operator privileges to.",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+		},
+	}
+}
+
+func (r *opResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*minecraft.Client)
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *minecraft.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.client = client
+}
+
+func (r *opResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data opResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
-		return
-	}
-
-	player := strings.TrimSpace(plan.Player.Value)
+	player := strings.TrimSpace(data.Player.ValueString())
 	if player == "" {
 		resp.Diagnostics.AddError("Validation Error", "Attribute `player` cannot be empty or whitespace.")
 		return
 	}
 
-	// Grant op
-	if err := client.CreateOp(ctx, player); err != nil {
+	if err := r.client.CreateOp(ctx, player); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to grant operator to %q: %s", player, err))
 		return
 	}
 
-	plan.ID = types.String{Value: player}
-
-	diags = resp.State.Set(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
+	data.ID = types.StringValue(player)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r opResource) Read(ctx context.Context, req tfsdk.ReadResourceRequest, resp *tfsdk.ReadResourceResponse) {
-	// No straightforward, portable RCON query to verify op list in this minimal version.
-	// Keep state as-is; drift detection can be added later if you expose an API to list ops.
-	var state opResourceData
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
+func (r *opResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
-	diags = resp.State.Set(ctx, &state)
-	resp.Diagnostics.Append(diags...)
-}
 
-func (r opResource) Update(ctx context.Context, req tfsdk.UpdateResourceRequest, resp *tfsdk.UpdateResourceResponse) {
-	// No updatable attributes; `player` is ForceNew. Just keep plan as state.
-	var plan opResourceData
-	diags := req.Plan.Get(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-	diags = resp.State.Set(ctx, &plan)
-	resp.Diagnostics.Append(diags...)
-}
-
-func (r opResource) Delete(ctx context.Context, req tfsdk.DeleteResourceRequest, resp *tfsdk.DeleteResourceResponse) {
-	var state opResourceData
-	diags := req.State.Get(ctx, &state)
-	resp.Diagnostics.Append(diags...)
+	var data opResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	client, err := r.provider.GetClient(ctx)
-	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create client: %s", err))
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *opResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
 		return
 	}
 
-	player := strings.TrimSpace(state.Player.Value)
+	var data opResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *opResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	if r.client == nil {
+		resp.Diagnostics.AddError(
+			"Client Error",
+			"Provider client is not configured. Please configure the provider before using this resource.",
+		)
+		return
+	}
+
+	var data opResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	player := strings.TrimSpace(data.Player.ValueString())
 	if player == "" {
-		// Nothing to do
 		return
 	}
 
-	if err := client.RemoveOp(ctx, player); err != nil {
+	if err := r.client.RemoveOp(ctx, player); err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to revoke operator from %q: %s", player, err))
 		return
 	}
 }
 
-func (r opResource) ImportState(ctx context.Context, req tfsdk.ImportResourceStateRequest, resp *tfsdk.ImportResourceStateResponse) {
-	// Allow `terraform import minecraft_op.this <playerName>`
-	// Set both id and player based on provided ID.
+func (r *opResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	player := strings.TrimSpace(req.ID)
 	if player == "" {
 		resp.Diagnostics.AddError("Import Error", "Expected non-empty player name as import ID.")
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("id"), player)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, tftypes.NewAttributePath().WithAttributeName("player"), player)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), player)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("player"), player)...)
 }
+

@@ -37,6 +37,7 @@ resource "minecraft_block" "stone" {
 - `id` (String) ID of the block
 
 <a id="nestedatt--position"></a>
+
 ### Nested Schema for `position`
 
 Required:
@@ -44,5 +45,3 @@ Required:
 - `x` (Number) X coordinate of the block
 - `y` (Number) Y coordinate of the block
 - `z` (Number) Z coordinate of the block
-
-

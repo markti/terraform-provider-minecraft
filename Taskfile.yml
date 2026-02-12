@@ -1,0 +1,62 @@
+# https://taskfile.dev
+---
+version: "3"
+
+vars:
+  NAME: minecraft
+  ORGANIZATION: hashicraft
+  VERSION: 0.1.0
+  LOG_LEVEL: info
+  TESTARGS: ""
+  BINARY: terraform-provider-{{.NAME}}_v{{.VERSION}}
+
+tasks:
+  default:
+    cmds:
+      - task: testacc
+
+  testacc:
+    env:
+      TF_ACC: "1"
+    cmds:
+      - go test ./... -v {{.TESTARGS}} -timeout 120m
+
+  build:
+    env:
+      GORELEASER_CURRENT_TAG: "v{{.VERSION}}"
+    cmds:
+      - goreleaser build --snapshot --clean --single-target
+
+  install:
+    cmds:
+      - task: build
+      - task: clean
+      - mkdir -p ~/.terraform.d/plugins/local/{{.ORGANIZATION}}/{{.NAME}}/{{.VERSION}}/linux_amd64
+      - |
+          bin_path=$(find dist -type f -name "{{.BINARY}}*" | head -n 1)
+          if [ -z "$bin_path" ]; then
+            echo "Binary not found in dist" >&2
+            exit 1
+          fi
+          mv "$bin_path" ~/.terraform.d/plugins/local/{{.ORGANIZATION}}/{{.NAME}}/{{.VERSION}}/linux_amd64/
+
+  clean:
+    cmds:
+      - rm -rf example/.terraform*
+      - rm -rf example/terraform.tfstate*
+
+  init:
+    cmds:
+      - TF_LOG={{.LOG_LEVEL}} terraform -chdir=examples init
+
+  plan:
+    cmds:
+      - TF_LOG={{.LOG_LEVEL}} terraform -chdir=examples plan
+
+  apply:
+    cmds:
+      - TF_LOG={{.LOG_LEVEL}} terraform -chdir=examples apply -auto-approve
+
+  destroy:
+    cmds:
+      - TF_LOG={{.LOG_LEVEL}} terraform -chdir=examples destroy -auto-approve
